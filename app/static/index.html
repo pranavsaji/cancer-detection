@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesion check: benign or malignant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="wordmark" href="#check">Lesion check</a>
+    <nav aria-label="Sections">
+      <a href="#check">Check an image</a>
+      <a href="#results">Test results</a>
+      <a href="#method">Method</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="check" class="check">
+      <div class="scope" id="dropzone">
+        <svg class="scope-svg" viewBox="0 0 400 400" role="img" aria-labelledby="scope-title">
+          <title id="scope-title">Lesion image with malignancy probability gauge</title>
+          <defs><clipPath id="aperture"><circle cx="200" cy="200" r="146"/></clipPath></defs>
+          <circle class="scope-well" cx="200" cy="200" r="146"/>
+          <image id="scope-image" x="54" y="54" width="292" height="292" preserveAspectRatio="xMidYMid slice" clip-path="url(#aperture)"/>
+          <circle class="scope-rim" cx="200" cy="200" r="146"/>
+          <g id="scope-ticks"></g>
+          <path id="scope-track" class="scope-track"/>
+          <path id="scope-arc" class="scope-arc"/>
+          <g id="scope-labels"></g>
+        </svg>
+        <div class="scope-prompt" id="scope-prompt">
+          <p>Drop a dermoscopy photo here</p>
+          <button type="button" class="button" id="choose">Choose an image</button>
+        </div>
+        <input type="file" id="file" accept="image/*" hidden>
+      </div>
+
+      <div class="readout" aria-live="polite">
+        <div id="readout-empty">
+          <h1>Is this skin lesion benign or malignant?</h1>
+          <p class="lede">Upload a close-up or dermoscopy photo of a single lesion. OpenAI's Decisions API returns a probability that it is malignant and the diagnosis it most resembles.</p>
+        </div>
+        <div id="readout-result" hidden>
+          <h1 id="verdict"></h1>
+          <p class="probability"><span id="probability-value"></span> <span id="probability-label">probability of malignancy</span></p>
+          <p class="note" id="lesion-warning" hidden></p>
+          <p class="truth" id="truth" hidden></p>
+          <h2 class="minor">Closest diagnosis</h2>
+          <ul class="types" id="types"></ul>
+          <p class="legend" id="types-legend">
+            <span class="key key-malignant"></span>Malignant type
+            <span class="key key-benign"></span>Benign type
+          </p>
+          <p class="meta" id="result-meta"></p>
+          <button type="button" class="button button-quiet" id="again">Check another image</button>
+        </div>
+        <p class="error" id="error" role="alert" hidden></p>
+        <p class="caution">Research demonstration only. It is not a medical device and cannot diagnose anything. See a dermatologist about any lesion that worries you.</p>
+      </div>
+
+      <div class="samples" id="samples-block" hidden>
+        <h2 class="minor">Or try one from the test set</h2>
+        <ul id="samples"></ul>
+      </div>
+    </section>
+
+    <section id="results" class="results">
+      <h2>How it did on <span id="n-cases">the</span> labelled test lesions</h2>
+      <div id="results-empty" class="empty" hidden>
+        <p>No evaluation has been run yet. Add your key to <code>.env</code>, then run:</p>
+        <pre>uv run python -m tools.evaluate</pre>
+      </div>
+
+      <div id="results-body" hidden>
+        <p class="headline" id="headline"></p>
+
+        <div class="threshold">
+          <label for="threshold">Call a lesion malignant at or above <output id="threshold-out">50%</output></label>
+          <input type="range" id="threshold" min="1" max="99" value="50" step="1">
+          <button type="button" class="button button-quiet" id="threshold-reset">Reset to 50%</button>
+        </div>
+
+        <dl class="stats" id="stats"></dl>
+
+        <div class="grid">
+          <figure class="panel">
+            <figcaption>Predictions against the confirmed diagnosis</figcaption>
+            <table class="matrix" id="matrix"></table>
+            <p class="hint">Select a cell to see those lesions below.</p>
+          </figure>
+          <figure class="panel">
+            <figcaption>Cancers caught against false alarms, at every cut-off <span class="sub" id="auc"></span></figcaption>
+            <div class="chart" id="roc"></div>
+          </figure>
+          <figure class="panel">
+            <figcaption>Probabilities the model gave each class</figcaption>
+            <p class="legend"><span class="key key-malignant"></span>Malignant lesions <span class="key key-benign"></span>Benign lesions</p>
+            <div class="chart" id="histogram"></div>
+          </figure>
+          <figure class="panel">
+            <figcaption>Does a stated probability match how often it was right? <span class="sub" id="ece"></span></figcaption>
+            <div class="chart" id="calibration"></div>
+          </figure>
+        </div>
+
+        <figure class="panel wide">
+          <figcaption>Results by confirmed diagnosis</figcaption>
+          <div class="table-scroll"><table class="diagnoses" id="diagnoses"></table></div>
+        </figure>
+
+        <div class="cases">
+          <div class="cases-head">
+            <h3 id="cases-title">Lesions</h3>
+            <div class="filters" id="filters" role="group" aria-label="Filter lesions"></div>
+          </div>
+          <ul class="case-grid" id="case-grid"></ul>
+          <button type="button" class="button button-quiet" id="more-cases" hidden>Show more</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="method" class="method">
+      <h2>Method</h2>
+      <div class="method-body" id="method-body">
+        <p>Each image is sent once to <code>POST /v1/decisions</code> with the <code>gpt-6-luna</code> model and three questions: a yes/no on malignancy, a pick-one diagnosis, and a check that the picture shows a skin lesion. The model sees only the image, with no patient history.</p>
+        <p>Test images come from HAM10000 in the public ISIC Archive: one image per lesion, drawn at random with a fixed seed, half benign and half malignant. That balance is deliberate and far from a real clinic, where most lesions are benign, so precision here overstates what you would see in practice.</p>
+        <p>The 50% cut-off was fixed before the run. Moving the slider shows the trade-off; it does not make any other cut-off a validated result. Ranges are 95% Wilson intervals.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
